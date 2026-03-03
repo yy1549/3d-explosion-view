@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>三维装配爆炸视图查看器</title>
+    <style>
+        * { margin: 0; padding: 0; }
+        body, html { width: 100%; height: 100%; overflow: hidden; background: #f5f5f5; }
+        #viewer { width: 100%; height: 100%; }
+        .hint {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #666;
+            font-size: 14px;
+            background: rgba(255,255,255,0.8);
+            padding: 5px 10px;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="hint">滑动屏幕旋转视角 | 双指缩放</div>
+    <div id="viewer"></div>
+
+    <!-- 引入Three.js核心库和GLB加载器 -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/controls/OrbitControls.js"></script>
+
+    <script>
+        // 1. 初始化场景、相机、渲染器
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xf5f5f5);
+        
+        // 透视相机（适配手机屏幕）
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.z = 5;
+
+        // 渲染器
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio); // 适配高清屏
+        document.getElementById('viewer').appendChild(renderer.domElement);
+
+        // 2. 添加轨道控制器（支持触屏滑动/鼠标拖拽）
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true; // 阻尼效果，滑动更顺滑
+        controls.dampingFactor = 0.05;
+        controls.screenSpacePanning = false;
+        controls.minDistance = 1; // 最小缩放距离
+        controls.maxDistance = 20; // 最大缩放距离
+        controls.maxPolarAngle = Math.PI / 2; // 限制垂直旋转角度
+
+        // 3. 添加光源（让模型更清晰）
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.8); // 环境光
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.6); // 方向光
+        directionalLight.position.set(5, 5, 5);
+        scene.add(directionalLight);
+
+        // 4. 加载GLB格式的爆炸视图模型
+        const loader = new THREE.GLTFLoader();
+        loader.load(
+            'explosion_view.glb', // 你的爆炸视图模型文件路径
+            function (gltf) {
+                const model = gltf.scene;
+                scene.add(model);
+
+                // 自动调整模型位置到屏幕中心
+                const box = new THREE.Box3().setFromObject(model);
+                const center = box.getCenter(new THREE.Vector3());
+                model.position.sub(center); // 模型居中
+
+                // 自动调整相机距离，让模型完整显示
+                const size = box.getSize(new THREE.Vector3());
+                const maxSize = Math.max(size.x, size.y, size.z);
+                const fitDistance = maxSize * 1.5 / Math.tan(Math.PI * camera.fov / 360);
+                camera.position.z = fitDistance;
+                controls.target = center; // 控制器围绕模型中心旋转
+                controls.update();
+            },
+            function (xhr) {
+                // 加载进度（可选）
+                console.log((xhr.loaded / xhr.total * 100) + '% loaded');
+            },
+            function (error) {
+                // 加载失败提示
+                console.error('模型加载失败:', error);
+                alert('爆炸视图模型加载失败，请检查文件路径是否正确');
+            }
+        );
+
+        // 5. 窗口大小自适应
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // 6. 动画循环（持续渲染）
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update(); // 更新控制器（阻尼效果需要）
+            renderer.render(scene, camera);
+        }
+        animate();
+    </script>
+</body>
+</html>
